@@ -2,7 +2,6 @@ import AppKit
 
 let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let ink = NSColor(calibratedRed: 0.16, green: 0.18, blue: 0.19, alpha: 1)
-let green = NSColor(calibratedRed: 0.18, green: 0.55, blue: 0.42, alpha: 1)
 func curve(_ points: [CGFloat], width: CGFloat, color: NSColor) {
     let p = NSBezierPath()
     p.move(to: NSPoint(x: points[0], y: points[1]))
@@ -10,28 +9,19 @@ func curve(_ points: [CGFloat], width: CGFloat, color: NSColor) {
     p.lineWidth = width; p.lineCapStyle = .round
     color.setStroke(); p.stroke()
 }
-func mark() {
-    curve([330,688,230,592,230,432,330,336], width: 44, color: ink)
-    curve([694,336,794,432,794,592,694,688], width: 44, color: ink)
-    curve([371,455,455,375,569,375,653,455], width: 34, color: ink)
-    curve([421,509,476,457,548,457,603,509], width: 34, color: ink)
-    curve([470,563,495,539,529,539,554,563], width: 34, color: ink)
-    ink.setFill(); NSBezierPath(ovalIn: NSRect(x: 494, y: 590, width: 36, height: 36)).fill()
-    let bolt = NSBezierPath()
-    bolt.move(to: NSPoint(x: 526, y: 650))
-    for point in [(488.0,695.0),(508.0,695.0),(498.0,732.0),(544.0,678.0),(522.0,678.0)] { bolt.line(to: NSPoint(x: point.0, y: point.1)) }
-    bolt.close(); green.setFill(); bolt.fill()
+func mark(color: NSColor = ink) {
+    transform(x:64,y:64,scale:7) {
+        curve([34,99,15,82,15,46,34,29], width:6, color:color)
+        curve([94,29,113,46,113,82,94,99], width:6, color:color)
+        curve([44,59,55,48,73,48,84,59], width:5.5, color:color)
+        curve([52,71,59,64,69,64,76,71], width:5.5, color:color)
+        color.setFill(); NSBezierPath(ovalIn:NSRect(x:61,y:80,width:6,height:6)).fill()
+    }
 }
 func logo() {
-    NSGraphicsContext.saveGraphicsState()
-    let shadow = NSShadow(); shadow.shadowColor = NSColor.black.withAlphaComponent(0.13)
-    shadow.shadowBlurRadius = 23; shadow.shadowOffset = NSSize(width: 0, height: -14); shadow.set()
-    let tile = NSBezierPath(roundedRect: NSRect(x: 88, y: 80, width: 848, height: 848), xRadius: 190, yRadius: 190)
-    NSColor.white.setFill(); tile.fill()
-    NSGraphicsContext.restoreGraphicsState()
-    NSGradient(starting: .white, ending: NSColor(calibratedRed: 0.94, green: 0.93, blue: 0.90, alpha: 1))!.draw(in: tile, angle: 90)
-    ink.withAlphaComponent(0.07).setStroke(); tile.lineWidth = 1.5; tile.stroke()
-    mark()
+    NSColor(calibratedWhite:0.085,alpha:1).setFill()
+    NSBezierPath(roundedRect:NSRect(x:88,y:80,width:848,height:848),xRadius:190,yRadius:190).fill()
+    mark(color:.white)
 }
 func text(_ s: String, x: CGFloat, y: CGFloat, size: CGFloat, weight: NSFont.Weight = .regular, color: NSColor = ink) {
     (s as NSString).draw(at: NSPoint(x: x,y: y), withAttributes: [.font: NSFont.systemFont(ofSize: size,weight: weight), .foregroundColor: color])
@@ -72,7 +62,7 @@ func menuIcon(x: CGFloat, y: CGFloat, size: CGFloat) {
     }
 }
 func overview(chinese: Bool) {
-    NSColor(calibratedRed:0.973,green:0.969,blue:0.953,alpha:1).setFill(); NSRect(x:0,y:0,width:1600,height:740).fill()
+    NSColor(calibratedWhite:0.97,alpha:1).setFill(); NSRect(x:0,y:0,width:1600,height:740).fill()
     text("DuoStatus",x:80,y:64,size:64,weight:.semibold)
     text(chinese ? "三个状态，一个位置。" : "Three signals. One spot.",x:83,y:153,size:29,color:ink.withAlphaComponent(0.65))
     transform(x:1270,y:24,scale:0.25) { logo() }

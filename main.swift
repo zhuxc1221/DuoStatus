@@ -240,10 +240,52 @@ enum NativeWiFiMenu {
     }
 }
 
+enum WindowInk {
+    static let muted = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(calibratedWhite: 0.71, alpha: 1) : NSColor(calibratedWhite: 0.41, alpha: 1)
+    }
+    static let warning = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(calibratedRed: 0.92, green: 0.74, blue: 0.45, alpha: 1) : NSColor(calibratedRed: 0.55, green: 0.35, blue: 0, alpha: 1)
+    }
+    static let error = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(calibratedRed: 1, green: 0.56, blue: 0.56, alpha: 1) : NSColor(calibratedRed: 0.70, green: 0.14, blue: 0.09, alpha: 1)
+    }
+}
+
+final class SettingsSurface: NSView {
+    let panel: Bool
+    init(frame: NSRect, panel: Bool = false) { self.panel = panel; super.init(frame: frame) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override var isFlipped: Bool { true }
+    override func draw(_ dirtyRect: NSRect) {
+        (panel ? NSColor.controlBackgroundColor : NSColor.windowBackgroundColor).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: panel ? 8 : 0, yRadius: panel ? 8 : 0).fill()
+    }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
+}
+
+final class PrimaryButton: NSButton {
+    override func draw(_ dirtyRect: NSRect) {
+        (isHighlighted ? NSColor.secondaryLabelColor : NSColor.labelColor).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6).fill()
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.windowBackgroundColor]
+        let size = (title as NSString).size(withAttributes: attrs)
+        (title as NSString).draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2), withAttributes: attrs)
+    }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var item: NSStatusItem!
     var window: NSWindow!
     var status: NSTextField!
+    var batteryValue: NSTextField!
+    var batteryDetail: NSTextField!
+    var wifiValue: NSTextField!
+    var wifiDetail: NSTextField!
+    var inputValue: NSTextField!
+    var inputDetail: NSTextField!
+    var permissionValue: NSTextField!
     var preview: RingView!
     var timer: Timer?
     var powerSource: CFRunLoopSource?
@@ -283,42 +325,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showWindow()
     }
     func makeWindow() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 390), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+        let size = NSSize(width: 420, height: 524)
+        window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "DuoStatus"
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.center()
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 390))
+        let content = SettingsSurface(frame: NSRect(origin: .zero, size: size))
         window.contentView = content
-        func label(_ text: String, y: CGFloat, height: CGFloat, size: CGFloat = 13, bold: Bool = false) -> NSTextField {
+        func label(_ text: String, _ rect: NSRect, size: CGFloat = 13, weight: NSFont.Weight = .regular, secondary: Bool = false, align: NSTextAlignment = .left, in parent: NSView? = nil) -> NSTextField {
             let field = NSTextField(wrappingLabelWithString: text)
-            field.frame = NSRect(x: 28, y: y, width: 404, height: height)
-            field.font = bold ? .boldSystemFont(ofSize: size) : .systemFont(ofSize: size)
-            content.addSubview(field)
+            field.frame = rect
+            field.font = .systemFont(ofSize: size, weight: weight)
+            field.textColor = secondary ? WindowInk.muted : .labelColor
+            field.alignment = align
+            (parent ?? content).addSubview(field)
             return field
         }
-        _ = label("电量、Wi‑Fi 与输入法", y: 340, height: 28, size: 23, bold: true)
-        let tile = NSView(frame: NSRect(x: 28, y: 256, width: 404, height: 64))
-        tile.wantsLayer = true
-        tile.layer?.backgroundColor = NSColor(calibratedRed: 0.20, green: 0.25, blue: 0.33, alpha: 1).cgColor
-        tile.layer?.cornerRadius = 12
-        content.addSubview(tile)
-        preview = RingView(frame: NSRect(x: 186, y: 17, width: 32, height: 30))
-        tile.addSubview(preview)
-        status = label("正在读取状态…", y: 207, height: 38)
-        _ = label("左键：系统 Wi‑Fi 面板 · ⌥ 左键：系统详细信息\n右键：电量、设置和退出菜单。", y: 150, height: 46)
-        _ = label("可关闭原生 Wi‑Fi、电池和输入法菜单栏图标，仅保留本组合图标。通过控制中心打开系统 Wi‑Fi 面板，需要授权 DuoStatus 操作系统界面。", y: 66, height: 50, size: 11)
-        let native = NSButton(title: "打开原生 Wi‑Fi 面板", target: self, action: #selector(openNativeWiFi))
-        native.bezelStyle = .rounded
-        native.frame = NSRect(x: 26, y: 114, width: 198, height: 30)
-        content.addSubview(native)
-        let permission = NSButton(title: "授权设置…", target: self, action: #selector(accessibilitySettings))
-        permission.bezelStyle = .rounded
-        permission.frame = NSRect(x: 230, y: 114, width: 125, height: 30)
+        func line(_ y: CGFloat, in parent: NSView, width: CGFloat) {
+            let rule = NSBox(frame: NSRect(x: 16, y: y, width: width - 32, height: 1))
+            rule.boxType = .separator
+            parent.addSubview(rule)
+        }
+        let logo = NSImageView(frame: NSRect(x: 28, y: 29, width: 42, height: 42))
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") { logo.image = NSImage(contentsOf: url) }
+        content.addSubview(logo)
+        _ = label("DuoStatus", NSRect(x: 82, y: 27, width: 220, height: 27), size: 22, weight: .semibold)
+        _ = label("电量 · Wi‑Fi · 输入法", NSRect(x: 83, y: 57, width: 220, height: 18), size: 12, secondary: true)
+        preview = RingView(frame: NSRect(x: 350, y: 34, width: 32, height: 30))
+        content.addSubview(preview)
+        let panel = SettingsSurface(frame: NSRect(x: 28, y: 98, width: 364, height: 168), panel: true)
+        content.addSubview(panel)
+        let rows = [("电量", "读取电源状态…"), ("Wi‑Fi", "读取连接状态…"), ("输入法", "读取输入源…")]
+        var values: [NSTextField] = [], details: [NSTextField] = []
+        for (index, row) in rows.enumerated() {
+            let top = CGFloat(index * 56)
+            _ = label(row.0, NSRect(x: 16, y: top + 10, width: 100, height: 19), weight: .medium, in: panel)
+            details.append(label(row.1, NSRect(x: 16, y: top + 31, width: 244, height: 18), size: 11, secondary: true, in: panel))
+            values.append(label("—", NSRect(x: 254, y: top + 17, width: 94, height: 26), size: 20, weight: .medium, align: .right, in: panel))
+            if index < 2 { line(top + 56, in: panel, width: 364) }
+        }
+        batteryValue = values[0]; wifiValue = values[1]; inputValue = values[2]
+        batteryDetail = details[0]; wifiDetail = details[1]; inputDetail = details[2]
+        _ = label("系统面板访问", NSRect(x: 28, y: 287, width: 120, height: 20), weight: .medium)
+        permissionValue = label("检查中", NSRect(x: 168, y: 288, width: 126, height: 18), size: 12, secondary: true, align: .right)
+        let permission = NSButton(title: "权限设置…", target: self, action: #selector(accessibilitySettings))
+        permission.isBordered = false
+        permission.font = .systemFont(ofSize: 12)
+        permission.frame = NSRect(x: 304, y: 281, width: 88, height: 28)
         content.addSubview(permission)
+        status = label("通过控制中心打开原生 Wi‑Fi 面板。", NSRect(x: 28, y: 315, width: 364, height: 36), size: 12, secondary: true)
+        let native = PrimaryButton(title: "打开 Wi‑Fi 面板", target: self, action: #selector(openNativeWiFi))
+        native.isBordered = false
+        native.frame = NSRect(x: 27, y: 358, width: 366, height: 36)
+        content.addSubview(native)
+        for (index, row) in [("普通点击", "Wi‑Fi 面板"), ("⌥ + 点击", "连接详细信息"), ("右键点击", "设置与退出")].enumerated() {
+            let y = CGFloat(410 + index * 22)
+            _ = label(row.0, NSRect(x: 28, y: y, width: 140, height: 18), size: 12, secondary: true)
+            _ = label(row.1, NSRect(x: 188, y: y, width: 204, height: 18), size: 12, align: .right)
+        }
+        let footerRule = NSBox(frame: NSRect(x: 28, y: 484, width: 364, height: 1))
+        footerRule.boxType = .separator
+        content.addSubview(footerRule)
+        _ = label("关闭窗口后，仍在菜单栏运行", NSRect(x: 28, y: 498, width: 290, height: 17), size: 11, secondary: true)
         let quit = NSButton(title: "退出", target: self, action: #selector(quit))
-        quit.bezelStyle = .rounded
-        quit.frame = NSRect(x: 360, y: 8, width: 72, height: 30)
+        quit.isBordered = false
+        quit.font = .systemFont(ofSize: 11)
+        quit.frame = NSRect(x: 348, y: 492, width: 44, height: 28)
         content.addSubview(quit)
+    }
+    func updateWindow() {
+        preview.ink = .labelColor
+        preview.inputLabel = inputSource.label
+        preview.battery = battery ?? Battery(percent: 0, charging: false, onExternalPower: false)
+        preview.symbol = wifi.symbol
+        preview.strength = wifi.strength
+        preview.needsDisplay = true
+        batteryValue.stringValue = battery.map { "\($0.percent)\($0.showsBolt ? " ⚡︎" : "")" } ?? "—"
+        batteryValue.font = .monospacedDigitSystemFont(ofSize: 20, weight: .medium)
+        batteryDetail.stringValue = battery?.powerLabel ?? "电量暂不可用"
+        let parts = wifi.label.components(separatedBy: " · ")
+        wifiValue.stringValue = parts.count > 1 ? parts[1] : (wifi.symbol == "wifi" ? "已连接" : "—")
+        wifiValue.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        wifiDetail.stringValue = parts.first ?? wifi.label
+        inputValue.stringValue = inputSource.label
+        inputDetail.stringValue = inputSource.label == "拼" ? "简体拼音" : (inputSource.label == "A" ? "英文输入" : inputSource.name)
+        let trusted = AXIsProcessTrusted()
+        permissionValue.stringValue = trusted ? "已授权" : "需要授权"
+        permissionValue.textColor = trusted ? WindowInk.muted : WindowInk.warning
+        status.stringValue = nativeError ?? (trusted ? "可隐藏原生 Wi‑Fi、电池和文字输入图标。" : "允许 DuoStatus 访问系统面板，即可使用原生 Wi‑Fi 菜单。")
+        status.textColor = nativeError == nil ? WindowInk.muted : WindowInk.error
     }
     @objc func wake() { refreshPower(); refreshInput(); refresh() }
     @objc func refreshPower() {
@@ -354,13 +450,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.button?.toolTip = battery.map { "电量 \($0.percent) · \($0.powerLabel) · \(wifi.label)" } ?? "电量暂不可用 · \(wifi.label)"
         item.button?.toolTip = (item.button?.toolTip ?? "") + " · 输入法：\(inputSource.name)（\(inputSource.label)）"
         item.button?.setAccessibilityLabel(item.button?.toolTip)
-        preview.inputLabel = inputSource.label
-        preview.battery = value
-        preview.symbol = wifi.symbol
-        preview.strength = wifi.strength
-        preview.needsDisplay = true
+        updateWindow()
         let batteryText = battery.map { "电量 \($0.percent) · \($0.powerLabel)" } ?? "电量暂不可用"
-        status.stringValue = nativeError ?? "\(batteryText)\n\(wifi.label)"
         guard !managementMenuOpen else { return }
         let menu = NSMenu()
         menu.delegate = self
@@ -486,7 +577,19 @@ func selfTest() {
     precondition(InputSource.label(id: "com.apple.keylayout.ABC", mode: "", language: "en", ascii: true, name: "ABC") == "A")
     precondition(InputSource.label(id: "com.apple.inputmethod.SCIM.ITABC", mode: "com.apple.inputmethod.SCIM.Roman", language: "zh-Hans", ascii: true, name: "拼音") == "A")
     precondition(icon(battery: paused, wifi: wifi, inputLabel: "拼").tiffRepresentation != icon(battery: paused, wifi: wifi, inputLabel: "A").tiffRepresentation)
-    print("PASS: centered charging/unplugged header, input source labels,  battery values, Wi-Fi signal levels and menu-bar template image rendering, Control Center detail action (never Wi-Fi toggle), paused-charge bolt rendering")
+    let screen = AppDelegate()
+    screen.makeWindow()
+    screen.updateWindow()
+    precondition(screen.batteryValue.stringValue == "—")
+    screen.battery = Battery(percent: 0, charging: false, onExternalPower: false)
+    screen.nativeError = "测试错误提示"
+    screen.updateWindow()
+    precondition(screen.batteryValue.stringValue == "0" && screen.status.stringValue == "测试错误提示")
+    let content = screen.window.contentView!
+    for view in content.subviews {
+        precondition(content.bounds.contains(view.frame), "Window content must not clip")
+    }
+    print("PASS: centered charging/unplugged header, input source labels, window missing/zero/error states and bounds, battery values, Wi-Fi signal levels and menu-bar template image rendering, Control Center detail action (never Wi-Fi toggle), paused-charge bolt rendering")
 }
 
 func renderPreview(_ path: String) throws {
@@ -516,9 +619,28 @@ func renderPreview(_ path: String) throws {
     try png.write(to: URL(fileURLWithPath: path))
 }
 
+func renderWindowPreview(_ path: String, dark: Bool, error: Bool) throws {
+    NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+    let delegate = AppDelegate()
+    delegate.makeWindow()
+    delegate.battery = Battery(percent: 80, charging: false, onExternalPower: true)
+    delegate.wifi = WiFi(symbol: "wifi", strength: 1, label: "Wi‑Fi 已连接 · -56 dBm")
+    delegate.inputSource = InputSource(label: "拼", name: "简体拼音")
+    if error { delegate.nativeError = "未找到控制中心中的 Wi‑Fi 模块，请在控制中心添加 Wi‑Fi 后重试。" }
+    delegate.updateWindow()
+    let content = delegate.window.contentView!
+    content.layoutSubtreeIfNeeded()
+    guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { throw NSError(domain: "DuoStatus", code: 3) }
+    content.cacheDisplay(in: content.bounds, to: bitmap)
+    guard let png = bitmap.representation(using: .png, properties: [:]) else { throw NSError(domain: "DuoStatus", code: 4) }
+    try png.write(to: URL(fileURLWithPath: path))
+}
+
 let app = NSApplication.shared
 if CommandLine.arguments.contains("--self-test") {
     selfTest()
+} else if let index = CommandLine.arguments.firstIndex(of: "--render-window-preview"), CommandLine.arguments.count > index + 1 {
+    try renderWindowPreview(CommandLine.arguments[index + 1], dark: CommandLine.arguments.contains("--dark"), error: CommandLine.arguments.contains("--error"))
 } else if let index = CommandLine.arguments.firstIndex(of: "--render-preview"), CommandLine.arguments.count > index + 1 {
     try renderPreview(CommandLine.arguments[index + 1])
 } else {

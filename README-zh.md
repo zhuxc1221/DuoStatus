@@ -37,6 +37,14 @@ DuoStatus 将数字电量、电量圆环、Wi-Fi 和当前输入法状态合成�
 
 上方配图使用示例数据绘制，没有使用真实桌面截图。
 
+## 应用窗口
+
+状态列表、单一主操作与黑白简约图标，跟随系统明暗模式。配图使用示例数据。
+
+<img src="docs/media/window-light.png" width="360" alt="DuoStatus 浅色窗口">
+
+[深色模式](docs/media/window-dark.png)
+
 ## 运行要求
 
 - macOS 27 及以上，已在 macOS 27.2 验证。

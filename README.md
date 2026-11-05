@@ -37,6 +37,14 @@ DuoStatus combines battery level, a battery ring, Wi-Fi status and the current i
 
 The artwork above is an illustration with sample data, not a capture of someone's desktop.
 
+## App window
+
+A compact status list, one main action and a monochrome app icon. Follows the system appearance. The images use sample data.
+
+<img src="docs/media/window-light.png" width="360" alt="DuoStatus light appearance">
+
+[Dark appearance](docs/media/window-dark.png)
+
 ## Requirements
 
 - macOS 27 or later; tested on macOS 27.2.
