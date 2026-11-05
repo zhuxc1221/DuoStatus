@@ -2,6 +2,8 @@ import AppKit
 import IOKit.ps
 import CoreWLAN
 import ApplicationServices
+import Carbon
+import OSLog
 
 struct Battery: Equatable {
     let percent: Int
@@ -36,8 +38,49 @@ struct Battery: Equatable {
     }
 }
 
+struct InputSource: Equatable {
+    let label: String
+    let name: String
+
+    static func label(id: String, mode: String, language: String, ascii: Bool, name: String) -> String {
+        if mode.lowercased().contains("roman") || id.contains("keylayout.ABC") { return "A" }
+        if id.lowercased().contains("pinyin") || id.contains("ITABC") || mode.lowercased().contains("pinyin") { return "拼" }
+        if language.hasPrefix("zh") { return "中" }
+        if ascii { return "A" }
+        return String(name.prefix(1))
+    }
+    static func read() -> InputSource {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return InputSource(label: "?", name: "输入法暂不可用") }
+        func property(_ key: CFString) -> AnyObject? {
+            guard let value = TISGetInputSourceProperty(source, key) else { return nil }
+            return Unmanaged<AnyObject>.fromOpaque(value).takeUnretainedValue()
+        }
+        let id = property(kTISPropertyInputSourceID) as? String ?? ""
+        let mode = property(kTISPropertyInputModeID) as? String ?? ""
+        let language = (property(kTISPropertyInputSourceLanguages) as? [String])?.first ?? ""
+        let name = property(kTISPropertyLocalizedName) as? String ?? "?"
+        let ascii = property(kTISPropertyInputSourceIsASCIICapable) as? Bool ?? false
+        return InputSource(label: label(id: id, mode: mode, language: language, ascii: ascii, name: name), name: name)
+    }
+}
+
+struct HeaderLayout {
+    static let font = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .bold)
+    let number: NSRect
+    let bolt: NSRect?
+    var bounds: NSRect { bolt.map { number.union($0) } ?? number }
+    init(percent: Int, showsBolt: Bool, width: CGFloat) {
+        let size = ("\(percent)" as NSString).size(withAttributes: [.font: Self.font])
+        let groupWidth = size.width + (showsBolt ? 5.5 : 0)
+        let x = (width - groupWidth) / 2
+        number = NSRect(x: x, y: 0, width: size.width, height: size.height)
+        bolt = showsBolt ? NSRect(x: x + size.width + 1, y: 1.2, width: 4.5, height: 7) : nil
+    }
+}
+
 final class RingView: NSView {
     var battery = Battery(percent: 80, charging: false, onExternalPower: false) { didSet { needsDisplay = true } }
+    var inputLabel = "拼" { didSet { needsDisplay = true } }
     var ink: NSColor = .white { didSet { needsDisplay = true } }
     var symbol = "wifi"
     var strength: Double = 1
@@ -46,40 +89,39 @@ final class RingView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
-        let center = CGPoint(x: bounds.midX, y: bounds.midY + 0.6)
-        let radius = min(bounds.width / 2 - 1.6, bounds.height / 2 - 2)
-        let stroke: CGFloat = 1.8
-        let arcs: [(Double, Double)] = [(135, 220), (320, 405)]
-        func segment(_ start: Double, _ end: Double, color: NSColor) {
-            guard end > start else { return }
+        let center = CGPoint(x: bounds.midX, y: 14.3)
+        let radius: CGFloat = 13.2
+        let header = HeaderLayout(percent: battery.percent, showsBolt: battery.showsBolt, width: bounds.width)
+        cg.saveGState()
+        cg.addRect(bounds)
+        cg.addRect(header.bounds.insetBy(dx: -1, dy: -0.5))
+        cg.clip(using: .evenOdd)
+        func segment(_ end: Double, color: NSColor) {
+            guard end > 135 else { return }
             cg.setStrokeColor(color.cgColor)
-            cg.setLineWidth(stroke)
+            cg.setLineWidth(1.7)
             cg.setLineCap(.round)
-            cg.addArc(center: center, radius: radius, startAngle: start * .pi / 180, endAngle: end * .pi / 180, clockwise: false)
+            cg.addArc(center: center, radius: radius, startAngle: 135 * .pi / 180, endAngle: end * .pi / 180, clockwise: false)
             cg.strokePath()
         }
-        let active = ink
-        var remaining = Double(battery.percent) / 100 * 170
-        for (start, end) in arcs {
-            segment(start, end, color: ink.withAlphaComponent(0.28))
-            segment(start, min(end, start + remaining), color: active)
-            remaining = max(0, remaining - (end - start))
+        segment(405, color: ink.withAlphaComponent(0.28))
+        segment(135 + Double(battery.percent) / 100 * 270, color: ink)
+        cg.restoreGState()
+        ("\(battery.percent)" as NSString).draw(at: header.number.origin, withAttributes: [.font: HeaderLayout.font, .foregroundColor: ink])
+        if let rect = header.bolt, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil) {
+            let configuration = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold).applying(.init(paletteColors: [ink]))
+            (bolt.withSymbolConfiguration(configuration) ?? bolt).draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         }
-        let text = "\(battery.percent)" as NSString
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .bold)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: active]
-        let size = text.size(withAttributes: attrs)
-        text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: 0.3), withAttributes: attrs)
-        if battery.showsBolt, let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil) {
-            let configuration = NSImage.SymbolConfiguration(pointSize: 9, weight: .bold).applying(.init(paletteColors: [ink]))
-            (bolt.withSymbolConfiguration(configuration) ?? bolt).draw(in: CGRect(x: center.x - 3, y: bounds.height - 8, width: 6, height: 7), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
-        }
+        let input = inputLabel as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 8, weight: .semibold), .foregroundColor: ink]
+        let size = input.size(withAttributes: attributes)
+        input.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: 20.5), withAttributes: attributes)
         if let wifi = NSImage(systemSymbolName: symbol, variableValue: strength, accessibilityDescription: nil) {
             let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold).applying(.init(paletteColors: [ink]))
             let image = wifi.withSymbolConfiguration(configuration) ?? wifi
-            let ratio = image.size.width / image.size.height
-            let h = 12.0
-            image.draw(in: CGRect(x: center.x - h * ratio / 2, y: center.y - h / 2, width: h * ratio, height: h), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            let h = 10.5
+            let w = h * image.size.width / image.size.height
+            image.draw(in: CGRect(x: center.x - w / 2, y: center.y - h / 2, width: w, height: h), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         }
     }
 }
@@ -107,10 +149,11 @@ struct WiFi {
     }
 }
 
-func icon(battery: Battery, wifi: WiFi) -> NSImage {
+func icon(battery: Battery, wifi: WiFi, inputLabel: String = "拼") -> NSImage {
     let view = RingView(frame: NSRect(x: 0, y: 0, width: 32, height: 30))
     view.ink = .black
     view.battery = battery
+    view.inputLabel = inputLabel
     view.symbol = wifi.symbol
     view.strength = wifi.strength
     let image = NSImage(size: view.bounds.size, flipped: true) { rect in
@@ -184,16 +227,15 @@ enum NativeWiFiMenu {
         AXUIElementSetMessagingTimeout(root, 0.25)
         func windows() -> [AXUIElement] { value(root, kAXWindowsAttribute) as? [AXUIElement] ?? [] }
         func module() -> AXUIElement? { windows().lazy.compactMap { find(in: $0, identifier: "controlcenter-wifi") }.first }
-        if let wifi = module() { return showWiFiDetails(wifi) }
         if windows().contains(where: { find(in: $0, identifier: "wifi-header") != nil }) { return perform(kAXPressAction, on: button) }
-        for _ in 0..<2 {
-            if let error = perform(kAXPressAction, on: button) { return error }
-            let deadline = Date().addingTimeInterval(1.2)
-            repeat {
-                if let wifi = module() { return showWiFiDetails(wifi) }
-                Thread.sleep(forTimeInterval: 0.03)
-            } while Date() < deadline
-        }
+        if let wifi = module() { return showWiFiDetails(wifi) }
+        // AXPress is a toggle: never retry it after a slow or indeterminate response.
+        if let error = perform(kAXPressAction, on: button) { return error }
+        let deadline = ProcessInfo.processInfo.systemUptime + 1.2
+        repeat {
+            if let wifi = module() { return showWiFiDetails(wifi) }
+            Thread.sleep(forTimeInterval: 0.03)
+        } while ProcessInfo.processInfo.systemUptime < deadline
         return "未找到控制中心中的 Wi‑Fi 模块，请先将 Wi‑Fi 控件加入控制中心。"
     }
 }
@@ -204,8 +246,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var status: NSTextField!
     var preview: RingView!
     var timer: Timer?
+    var powerSource: CFRunLoopSource?
+    var inputSource = InputSource(label: "?", name: "读取中")
+    let timing = Logger(subsystem: "io.github.zhuxc1221.DuoStatus", category: "RefreshTiming")
     var reading = false
     var openingNative = false
+    var nativeFinishedAt: TimeInterval = 0
+    var nativeError: String?
     var managementMenu = NSMenu()
     var managementMenuOpen = false
     var battery: Battery?
@@ -220,11 +267,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.button?.target = self
         item.button?.action = #selector(clicked(_:))
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        updateUI()
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        powerSource = IOPSNotificationCreateRunLoopSource({ context in
+            guard let context else { return }
+            Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue().refreshPower()
+        }, context)?.takeRetainedValue()
+        if let powerSource { CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .commonModes) }
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(refreshInput), name: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, suspensionBehavior: .deliverImmediately)
+        refreshPower()
+        refreshInput()
         refresh()
         timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
         RunLoop.main.add(timer!, forMode: .common)
-        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(refresh), name: NSWorkspace.didWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(wake), name: NSWorkspace.didWakeNotification, object: nil)
         showWindow()
     }
     func makeWindow() {
@@ -241,7 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             content.addSubview(field)
             return field
         }
-        _ = label("电量与 Wi‑Fi，合在一起", y: 340, height: 28, size: 23, bold: true)
+        _ = label("电量、Wi‑Fi 与输入法", y: 340, height: 28, size: 23, bold: true)
         let tile = NSView(frame: NSRect(x: 28, y: 256, width: 404, height: 64))
         tile.wantsLayer = true
         tile.layer?.backgroundColor = NSColor(calibratedRed: 0.20, green: 0.25, blue: 0.33, alpha: 1).cgColor
@@ -251,7 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tile.addSubview(preview)
         status = label("正在读取状态…", y: 207, height: 38)
         _ = label("左键：系统 Wi‑Fi 面板 · ⌥ 左键：系统详细信息\n右键：电量、设置和退出菜单。", y: 150, height: 46)
-        _ = label("可关闭原生 Wi‑Fi 和电池菜单栏图标，仅保留本组合图标。通过控制中心打开系统 Wi‑Fi 面板，需要授权 DuoStatus 操作系统界面。", y: 66, height: 50, size: 11)
+        _ = label("可关闭原生 Wi‑Fi、电池和输入法菜单栏图标，仅保留本组合图标。通过控制中心打开系统 Wi‑Fi 面板，需要授权 DuoStatus 操作系统界面。", y: 66, height: 50, size: 11)
         let native = NSButton(title: "打开原生 Wi‑Fi 面板", target: self, action: #selector(openNativeWiFi))
         native.bezelStyle = .rounded
         native.frame = NSRect(x: 26, y: 114, width: 198, height: 30)
@@ -265,15 +320,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         quit.frame = NSRect(x: 360, y: 8, width: 72, height: 30)
         content.addSubview(quit)
     }
+    @objc func wake() { refreshPower(); refreshInput(); refresh() }
+    @objc func refreshPower() {
+        let start = ProcessInfo.processInfo.systemUptime
+        battery = Battery.read()
+        updateUI()
+        let milliseconds = (ProcessInfo.processInfo.systemUptime - start) * 1000
+        timing.debug("power notification → icon submission: \(milliseconds, format: .fixed(precision: 3)) ms")
+    }
+    @objc func refreshInput() {
+        let start = ProcessInfo.processInfo.systemUptime
+        inputSource = InputSource.read()
+        updateUI()
+        let milliseconds = (ProcessInfo.processInfo.systemUptime - start) * 1000
+        timing.debug("input notification → icon submission: \(milliseconds, format: .fixed(precision: 3)) ms")
+    }
     @objc func refresh() {
         guard !reading else { return }
         reading = true
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let battery = Battery.read()
             let wifi = WiFi.read()
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.battery = battery
                 self.wifi = wifi
                 self.reading = false
                 self.updateUI()
@@ -282,20 +350,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func updateUI() {
         let value = battery ?? Battery(percent: 0, charging: false, onExternalPower: false)
-        item.button?.image = icon(battery: value, wifi: wifi)
+        item.button?.image = icon(battery: value, wifi: wifi, inputLabel: inputSource.label)
         item.button?.toolTip = battery.map { "电量 \($0.percent) · \($0.powerLabel) · \(wifi.label)" } ?? "电量暂不可用 · \(wifi.label)"
+        item.button?.toolTip = (item.button?.toolTip ?? "") + " · 输入法：\(inputSource.name)（\(inputSource.label)）"
         item.button?.setAccessibilityLabel(item.button?.toolTip)
+        preview.inputLabel = inputSource.label
         preview.battery = value
         preview.symbol = wifi.symbol
         preview.strength = wifi.strength
         preview.needsDisplay = true
         let batteryText = battery.map { "电量 \($0.percent) · \($0.powerLabel)" } ?? "电量暂不可用"
-        status.stringValue = "\(batteryText)\n\(wifi.label)"
+        status.stringValue = nativeError ?? "\(batteryText)\n\(wifi.label)"
         guard !managementMenuOpen else { return }
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
-        for title in [batteryText, wifi.label] {
+        for title in [batteryText, wifi.label, "输入法：\(inputSource.name)（\(inputSource.label)）"] {
             let row = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             row.isEnabled = false
             menu.addItem(row)
@@ -320,8 +390,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.menu = managementMenu
             sender.performClick(nil)
         } else {
+            guard Self.acceptsNativeClick(eventTime: event.timestamp, finishedAt: nativeFinishedAt) else { return }
             openNativeWiFi()
         }
+    }
+    static func acceptsNativeClick(eventTime: TimeInterval, finishedAt: TimeInterval) -> Bool {
+        finishedAt == 0 || eventTime > finishedAt + 0.25
     }
     func menuWillOpen(_ menu: NSMenu) { managementMenuOpen = true }
     func menuDidClose(_ menu: NSMenu) {
@@ -330,18 +404,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func openNativeWiFi() {
         guard !openingNative else { return }
+        guard ProcessInfo.processInfo.systemUptime > nativeFinishedAt + 0.25 else { return }
         guard AXIsProcessTrusted() else {
-            status.stringValue = "需要授权：请点击“授权设置”，允许 DuoStatus 打开系统 Wi‑Fi 面板。"
-            showWindow()
+            nativeError = "需要授权：请点击“授权设置”，允许 DuoStatus 打开系统 Wi‑Fi 面板。"
+            updateUI()
             return
         }
+        nativeError = nil
         openingNative = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let error = NativeWiFiMenu.open()
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.nativeFinishedAt = ProcessInfo.processInfo.systemUptime
                 self.openingNative = false
-                if let error { self.status.stringValue = error; self.showWindow() }
+                self.nativeError = error
+                self.updateUI()
+                if error != nil { self.timing.debug("native Wi-Fi request failed") }
             }
         }
     }
@@ -355,10 +434,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func showWindow() { window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWindow(); return true }
     @objc func quit() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { timer?.invalidate(); NSStatusBar.system.removeStatusItem(item) }
+    func applicationWillTerminate(_ notification: Notification) {
+        timer?.invalidate()
+        if let powerSource { CFRunLoopSourceInvalidate(powerSource) }
+        DistributedNotificationCenter.default().removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+        NSStatusBar.system.removeStatusItem(item)
+    }
 }
 
 func selfTest() {
+    precondition(!AppDelegate.acceptsNativeClick(eventTime: 9, finishedAt: 10))
+    precondition(!AppDelegate.acceptsNativeClick(eventTime: 10.1, finishedAt: 10))
+    precondition(AppDelegate.acceptsNativeClick(eventTime: 10.3, finishedAt: 10))
+    precondition(AppDelegate.acceptsNativeClick(eventTime: 1, finishedAt: 0))
     precondition(Battery.percent(current: 68, maximum: 100) == 68)
     precondition(Battery.percent(current: 4000, maximum: 5000) == 80)
     precondition(Battery.percent(current: 102, maximum: 100) == 100)
@@ -386,7 +475,18 @@ func selfTest() {
     let image = icon(battery: Battery(percent: 100, charging: false, onExternalPower: false), wifi: WiFi(symbol: "wifi", strength: 1, label: ""))
     precondition(image.isTemplate && image.size == NSSize(width: 32, height: 30))
     precondition(image.tiffRepresentation != nil)
-    print("PASS: battery values, Wi-Fi signal levels and menu-bar template image rendering, Control Center detail action (never Wi-Fi toggle), paused-charge bolt rendering")
+    for percent in [0, 8, 80, 100] {
+        for bolt in [false, true] {
+            let layout = HeaderLayout(percent: percent, showsBolt: bolt, width: 32)
+            precondition(abs(layout.bounds.midX - 16) < 0.001)
+            precondition(layout.bounds.minX >= 0 && layout.bounds.maxX <= 32)
+        }
+    }
+    precondition(InputSource.label(id: "com.apple.inputmethod.SCIM.ITABC", mode: "", language: "zh-Hans", ascii: false, name: "拼音") == "拼")
+    precondition(InputSource.label(id: "com.apple.keylayout.ABC", mode: "", language: "en", ascii: true, name: "ABC") == "A")
+    precondition(InputSource.label(id: "com.apple.inputmethod.SCIM.ITABC", mode: "com.apple.inputmethod.SCIM.Roman", language: "zh-Hans", ascii: true, name: "拼音") == "A")
+    precondition(icon(battery: paused, wifi: wifi, inputLabel: "拼").tiffRepresentation != icon(battery: paused, wifi: wifi, inputLabel: "A").tiffRepresentation)
+    print("PASS: centered charging/unplugged header, input source labels,  battery values, Wi-Fi signal levels and menu-bar template image rendering, Control Center detail action (never Wi-Fi toggle), paused-charge bolt rendering")
 }
 
 func renderPreview(_ path: String) throws {
@@ -395,8 +495,9 @@ func renderPreview(_ path: String) throws {
     canvas.layer?.backgroundColor = NSColor(calibratedRed: 0.18, green: 0.23, blue: 0.31, alpha: 1).cgColor
     let fixtures = [Battery(percent: 80, charging: false, onExternalPower: false), Battery(percent: 80, charging: false, onExternalPower: true), Battery(percent: 80, charging: true, onExternalPower: true)]
     for (i, battery) in fixtures.enumerated() {
-        let ring = RingView(frame: NSRect(x: 100 + CGFloat(i) * 220, y: 96, width: 32, height: 33))
+        let ring = RingView(frame: NSRect(x: 100 + CGFloat(i) * 220, y: 96, width: 32, height: 30))
         ring.battery = battery
+        ring.inputLabel = i == 1 ? "A" : "拼"
         canvas.addSubview(ring)
         let caption = NSTextField(labelWithString: ["80 · 使用电池", "80 · 接电，暂停充电", "80 · 正在充电"][i])
         caption.textColor = .white
@@ -404,7 +505,7 @@ func renderPreview(_ path: String) throws {
         caption.frame = NSRect(x: 62 + CGFloat(i) * 220, y: 58, width: 140, height: 20)
         canvas.addSubview(caption)
     }
-    let note = NSTextField(labelWithString: "数字电量 · 接电时显示闪电（含充电上限暂停状态）")
+    let note = NSTextField(labelWithString: "数字叠加圆环 · 接电时显示闪电 · 底部显示当前输入法")
     note.font = .systemFont(ofSize: 12)
     note.textColor = NSColor.white.withAlphaComponent(0.7)
     note.frame = NSRect(x: 62, y: 160, width: 620, height: 20)

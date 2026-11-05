@@ -50,26 +50,31 @@ func wifi(x: CGFloat, y: CGFloat, color: NSColor) {
 func menuIcon(x: CGFloat, y: CGFloat, size: CGFloat) {
     transform(x:x,y:y,scale:size/32) {
         let color = NSColor.white
-        for (start,end) in [(135.0,220.0),(320.0,405.0)] {
-            let p = NSBezierPath(); let radius = 14.0
-            for i in 0...50 {
-                let a = (start + (end-start)*Double(i)/50) * .pi/180
-                let point = NSPoint(x:16+radius*cos(a),y:15.6+radius*sin(a))
-                if i == 0 { p.move(to:point) } else { p.line(to:point) }
-            }
-            p.lineWidth=1.8; p.lineCapStyle = .round; color.setStroke(); p.stroke()
+        let cg = NSGraphicsContext.current!.cgContext
+        cg.saveGState()
+        cg.addRect(NSRect(x:0,y:0,width:32,height:32))
+        cg.addRect(NSRect(x:6,y:-1,width:20,height:10.5))
+        cg.clip(using:.evenOdd)
+        let center = NSPoint(x:16,y:14.3)
+        for (end,alpha) in [(405.0,0.28),(351.0,1.0)] {
+            cg.setStrokeColor(color.withAlphaComponent(alpha).cgColor)
+            cg.setLineWidth(1.7); cg.setLineCap(.round)
+            cg.addArc(center:center,radius:13.2,startAngle:135 * .pi/180,endAngle:end * .pi/180,clockwise:false)
+            cg.strokePath()
         }
-        text("80",x:10.8,y:-0.5,size:8,weight:.bold,color:color)
-        transform(x:16,y:14,scale:0.50) { wifi(x:0,y:0,color:color) }
-        let p = NSBezierPath(); p.move(to:NSPoint(x:17,y:22))
-        for q in [(13.0,26.0),(15.7,26.0),(14.7,30.0),(19.0,24.7),(16.7,24.7)] { p.line(to:NSPoint(x:q.0,y:q.1)) }
+        cg.restoreGState()
+        text("80",x:8.0,y:0,size:8,weight:.bold,color:color)
+        let p = NSBezierPath(); p.move(to:NSPoint(x:23.5,y:1.2))
+        for q in [(19.5,5.0),(22.0,5.0),(21.0,8.2),(24.0,3.5),(22.0,3.5)] { p.line(to:NSPoint(x:q.0,y:q.1)) }
         p.close(); color.setFill(); p.fill()
+        transform(x:16,y:13,scale:0.40) { wifi(x:0,y:0,color:color) }
+        text("拼",x:12,y:20.5,size:8,weight:.semibold,color:color)
     }
 }
 func overview(chinese: Bool) {
     NSColor(calibratedRed:0.973,green:0.969,blue:0.953,alpha:1).setFill(); NSRect(x:0,y:0,width:1600,height:740).fill()
     text("DuoStatus",x:80,y:64,size:64,weight:.semibold)
-    text(chinese ? "两个状态，一个位置。" : "Two signals. One spot.",x:83,y:153,size:29,color:ink.withAlphaComponent(0.65))
+    text(chinese ? "三个状态，一个位置。" : "Three signals. One spot.",x:83,y:153,size:29,color:ink.withAlphaComponent(0.65))
     transform(x:1270,y:24,scale:0.25) { logo() }
     let card = NSBezierPath(roundedRect:NSRect(x:80,y:268,width:1440,height:350),xRadius:34,yRadius:34)
     NSColor.white.setFill(); card.fill()
@@ -80,6 +85,7 @@ func overview(chinese: Bool) {
         let bar=NSBezierPath(roundedRect:NSRect(x:x,y:365,width:580,height:112),xRadius:23,yRadius:23)
         NSColor(calibratedRed:0.20,green:0.24,blue:0.29,alpha:1).setFill(); bar.fill()
     }
+    text("拼",x:291,y:394,size:27,weight:.semibold,color:.white)
     wifi(x:378,y:412,color:.white)
     let battery=NSBezierPath(roundedRect:NSRect(x:448,y:397,width:62,height:29),xRadius:6,yRadius:6)
     NSColor.white.withAlphaComponent(0.93).setFill(); battery.fill()
@@ -87,9 +93,9 @@ func overview(chinese: Bool) {
     text("80",x:457,y:394,size:23,weight:.semibold,color:NSColor(calibratedRed:0.20,green:0.24,blue:0.29,alpha:1))
     menuIcon(x:1157,y:384,size:66)
     text("→",x:767,y:392,size:42,weight:.light,color:ink.withAlphaComponent(0.45))
-    text(chinese ? "Wi‑Fi 与电池，分别占位" : "Wi-Fi and battery, side by side",x:130,y:514,size:23)
-    text(chinese ? "合为一个，空出一格" : "Combined, with a spot to spare",x:890,y:514,size:23)
-    text(chinese ? "数字电量  ·  接电闪电  ·  系统原生 Wi‑Fi 面板" : "Battery level  ·  Power indicator  ·  Native Wi-Fi panel",x:80,y:664,size:23,color:ink.withAlphaComponent(0.60))
+    text(chinese ? "输入法、Wi‑Fi 与电池，分别占位" : "Input source, Wi-Fi and battery",x:130,y:514,size:23)
+    text(chinese ? "合为一个，空出两格" : "Combined, with two spots to spare",x:890,y:514,size:23)
+    text(chinese ? "数字电量  ·  接电闪电  ·  输入法状态  ·  原生 Wi‑Fi 面板" : "Battery level  ·  Power indicator  ·  Input source  ·  Native Wi-Fi panel",x:80,y:664,size:23,color:ink.withAlphaComponent(0.60))
 }
 final class Canvas:NSView {
     var drawBody:()->Void = {}
