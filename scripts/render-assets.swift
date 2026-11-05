@@ -32,61 +32,62 @@ func transform(x: CGFloat, y: CGFloat, scale: CGFloat, _ body: () -> Void) {
     let t = NSAffineTransform(); t.translateX(by: x,yBy: y); t.scale(by: scale); t.concat()
     body(); NSGraphicsContext.restoreGraphicsState()
 }
-func wifi(x: CGFloat, y: CGFloat, color: NSColor) {
-    curve([x-15,y-5,x-6,y-14,x+6,y-14,x+15,y-5],width: 3.5,color: color)
-    curve([x-10,y+1,x-4,y-5,x+4,y-5,x+10,y+1],width: 3.5,color: color)
-    curve([x-5,y+7,x-2,y+4,x+2,y+4,x+5,y+7],width: 3.5,color: color)
-    color.setFill(); NSBezierPath(ovalIn: NSRect(x:x-2,y:y+11,width:4,height:4)).fill()
+func symbol(_ name: String, rect: NSRect, color: NSColor, weight: NSFont.Weight = .regular) {
+    guard let image = NSImage(systemSymbolName:name, accessibilityDescription:nil) else { return }
+    let configuration = NSImage.SymbolConfiguration(pointSize:rect.height, weight:weight).applying(.init(paletteColors:[color]))
+    (image.withSymbolConfiguration(configuration) ?? image).draw(in:rect,from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil)
 }
-func menuIcon(x: CGFloat, y: CGFloat, size: CGFloat) {
+func menuIcon(x: CGFloat, y: CGFloat, size: CGFloat, color: NSColor = .white, input: String = "拼") {
     transform(x:x,y:y,scale:size/32) {
-        let color = NSColor.white
+        let font = NSFont.monospacedDigitSystemFont(ofSize:8,weight:.bold)
+        let attrs: [NSAttributedString.Key:Any] = [.font:font,.foregroundColor:color]
+        let number = "80" as NSString
+        let measured = number.size(withAttributes:attrs)
+        let start = (32 - measured.width - 5.5) / 2
+        let header = NSRect(x:start,y:0,width:measured.width+5.5,height:measured.height)
         let cg = NSGraphicsContext.current!.cgContext
         cg.saveGState()
-        cg.addRect(NSRect(x:0,y:0,width:32,height:32))
-        cg.addRect(NSRect(x:6,y:-1,width:20,height:10.5))
+        cg.addRect(NSRect(x:0,y:0,width:32,height:30))
+        cg.addRect(header.insetBy(dx:-1,dy:-0.5))
         cg.clip(using:.evenOdd)
-        let center = NSPoint(x:16,y:14.3)
         for (end,alpha) in [(405.0,0.28),(351.0,1.0)] {
             cg.setStrokeColor(color.withAlphaComponent(alpha).cgColor)
             cg.setLineWidth(1.7); cg.setLineCap(.round)
-            cg.addArc(center:center,radius:13.2,startAngle:135 * .pi/180,endAngle:end * .pi/180,clockwise:false)
+            cg.addArc(center:NSPoint(x:16,y:14.3),radius:13.2,startAngle:135 * .pi/180,endAngle:end * .pi/180,clockwise:false)
             cg.strokePath()
         }
         cg.restoreGState()
-        text("80",x:8.0,y:0,size:8,weight:.bold,color:color)
-        let p = NSBezierPath(); p.move(to:NSPoint(x:23.5,y:1.2))
-        for q in [(19.5,5.0),(22.0,5.0),(21.0,8.2),(24.0,3.5),(22.0,3.5)] { p.line(to:NSPoint(x:q.0,y:q.1)) }
-        p.close(); color.setFill(); p.fill()
-        transform(x:16,y:13,scale:0.40) { wifi(x:0,y:0,color:color) }
-        text("拼",x:12,y:19.5,size:8,weight:.semibold,color:color)
+        number.draw(at:NSPoint(x:start,y:0),withAttributes:attrs)
+        symbol("bolt.fill",rect:NSRect(x:start+measured.width+1,y:1.2,width:4.5,height:7),color:color,weight:.bold)
+        symbol("wifi",rect:NSRect(x:8.7,y:9.05,width:14.6,height:10.5),color:color,weight:.semibold)
+        let inputAttributes: [NSAttributedString.Key:Any] = [.font:NSFont.systemFont(ofSize:8,weight:.semibold),.foregroundColor:color]
+        let inputText = input as NSString
+        inputText.draw(at:NSPoint(x:16-inputText.size(withAttributes:inputAttributes).width/2,y:19.5),withAttributes:inputAttributes)
     }
 }
 func overview(chinese: Bool) {
-    NSColor(calibratedWhite:0.97,alpha:1).setFill(); NSRect(x:0,y:0,width:1600,height:740).fill()
-    text("DuoStatus",x:80,y:64,size:64,weight:.semibold)
-    text(chinese ? "三个状态，一个位置。" : "Three signals. One spot.",x:83,y:153,size:29,color:ink.withAlphaComponent(0.65))
-    transform(x:1270,y:24,scale:0.25) { logo() }
-    let card = NSBezierPath(roundedRect:NSRect(x:80,y:268,width:1440,height:350),xRadius:34,yRadius:34)
-    NSColor.white.setFill(); card.fill()
-    ink.withAlphaComponent(0.07).setStroke(); card.lineWidth=1; card.stroke()
-    text(chinese ? "合并前" : "Before",x:130,y:301,size:22,weight:.medium,color:ink.withAlphaComponent(0.55))
-    text(chinese ? "合并后" : "After",x:890,y:301,size:22,weight:.medium,color:ink.withAlphaComponent(0.55))
-    for x in [CGFloat(130),CGFloat(890)] {
-        let bar=NSBezierPath(roundedRect:NSRect(x:x,y:365,width:580,height:112),xRadius:23,yRadius:23)
-        NSColor(calibratedRed:0.20,green:0.24,blue:0.29,alpha:1).setFill(); bar.fill()
-    }
-    text("拼",x:291,y:394,size:27,weight:.semibold,color:.white)
-    wifi(x:378,y:412,color:.white)
-    let battery=NSBezierPath(roundedRect:NSRect(x:448,y:397,width:62,height:29),xRadius:6,yRadius:6)
-    NSColor.white.withAlphaComponent(0.93).setFill(); battery.fill()
-    NSColor.white.withAlphaComponent(0.6).setFill(); NSBezierPath(roundedRect:NSRect(x:512,y:405,width:4,height:13),xRadius:2,yRadius:2).fill()
-    text("80",x:457,y:394,size:23,weight:.semibold,color:NSColor(calibratedRed:0.20,green:0.24,blue:0.29,alpha:1))
-    menuIcon(x:1157,y:384,size:66)
-    text("→",x:767,y:392,size:42,weight:.light,color:ink.withAlphaComponent(0.45))
-    text(chinese ? "输入法、Wi‑Fi 与电池，分别占位" : "Input source, Wi-Fi and battery",x:130,y:514,size:23)
-    text(chinese ? "合为一个，空出两格" : "Combined, with two spots to spare",x:890,y:514,size:23)
-    text(chinese ? "数字电量  ·  接电闪电  ·  输入法状态  ·  原生 Wi‑Fi 面板" : "Battery level  ·  Power indicator  ·  Input source  ·  Native Wi-Fi panel",x:80,y:664,size:23,color:ink.withAlphaComponent(0.60))
+    let ground = NSColor(calibratedWhite:0.065,alpha:1)
+    let muted = NSColor(calibratedWhite:0.67,alpha:1)
+    let dark = NSColor(calibratedWhite:0.12,alpha:1)
+    ground.setFill(); NSRect(x:0,y:0,width:1600,height:800).fill()
+    text(chinese ? "三个状态。" : "Three signals.",x:88,y:88,size:80,weight:.medium,color:.white)
+    text(chinese ? "一个位置。" : "One small space.",x:88,y:182,size:80,weight:.medium,color:.white)
+    text(chinese ? "电量、Wi‑Fi 与输入法，合在一起。" : "Battery, Wi-Fi and input source, together.",x:92,y:310,size:25,color:muted)
+    menuIcon(x:1080,y:114,size:280,input:chinese ? "拼" : "A")
+    text(chinese ? "少一点占位，多一点空间。" : "Less in the bar. More room for you.",x:92,y:476,size:23,color:.white)
+    text("3 → 1",x:1424,y:478,size:22,color:muted)
+    NSColor(calibratedWhite:0.96,alpha:1).setFill()
+    NSBezierPath(roundedRect:NSRect(x:88,y:524,width:1424,height:88),xRadius:14,yRadius:14).fill()
+    symbol("apple.logo",rect:NSRect(x:120,y:553,width:23,height:26),color:dark)
+    text("Finder",x:166,y:551,size:24,weight:.semibold,color:dark)
+    text(chinese ? "文件" : "File",x:270,y:553,size:22,color:dark)
+    text(chinese ? "编辑" : "Edit",x:354,y:553,size:22,color:dark)
+    text(chinese ? "显示" : "View",x:438,y:553,size:22,color:dark)
+    symbol("play.circle",rect:NSRect(x:1128,y:552,width:28,height:28),color:dark)
+    menuIcon(x:1202,y:537,size:66,color:dark,input:chinese ? "拼" : "A")
+    symbol("switch.2",rect:NSRect(x:1322,y:554,width:28,height:24),color:dark)
+    text("14:10",x:1384,y:550,size:25,weight:.medium,color:dark)
+    text(chinese ? "原生 Wi‑Fi 面板  ·  Option 查看详情  ·  输入法即时更新" : "Native Wi-Fi panel  ·  Option-click details  ·  Live input source",x:92,y:675,size:23,color:muted)
 }
 final class Canvas:NSView {
     var drawBody:()->Void = {}
@@ -114,6 +115,6 @@ for pointSize in [16,32,128,256,512] {
         try png(".build/DuoStatus.iconset/icon_\(pointSize)x\(pointSize)\(suffix).png",width:pointSize*scale,height:pointSize*scale,logicalWidth:1024,logicalHeight:1024,draw:logo)
     }
 }
-try png("docs/media/overview-en.png",width:1600,height:740,logicalWidth:1600,logicalHeight:740) {overview(chinese:false)}
-try png("docs/media/overview-zh.png",width:1600,height:740,logicalWidth:1600,logicalHeight:740) {overview(chinese:true)}
+try png("docs/media/overview-en.png",width:1600,height:800,logicalWidth:1600,logicalHeight:800) {overview(chinese:false)}
+try png("docs/media/overview-zh.png",width:1600,height:800,logicalWidth:1600,logicalHeight:800) {overview(chinese:true)}
 print("Rendered original logo, iconset and privacy-safe documentation illustrations")

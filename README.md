@@ -15,7 +15,7 @@
 
 <br>
 
-<img src="docs/media/overview-en.png" width="100%" alt="Illustration: separate input source, Wi-Fi and battery icons become one combined menu bar item">
+<img src="docs/media/overview-en.png" width="100%" alt="DuoStatus: three signals in one menu bar item, with an enlarged icon and menu bar illustration">
 
 </div>
 

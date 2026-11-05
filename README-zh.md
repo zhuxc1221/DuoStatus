@@ -15,7 +15,7 @@
 
 <br>
 
-<img src="docs/media/overview-zh.png" width="100%" alt="示意图：原本分开的输入法、Wi-Fi 和电池图标合为一个，空出两个菜单栏位置">
+<img src="docs/media/overview-zh.png" width="100%" alt="DuoStatus：三个状态合为一个图标，组合图标与菜单栏示意">
 
 </div>
 
