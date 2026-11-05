@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="220 300 584 460" width="584" height="460" role="img" aria-label="DuoStatus mark">
+  <g fill="none" stroke="#292e30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M330 688C230 592 230 432 330 336M694 336C794 432 794 592 694 688" stroke-width="44"/>
+    <path d="M371 455C455 375 569 375 653 455M421 509C476 457 548 457 603 509M470 563C495 539 529 539 554 563" stroke-width="34"/>
+  </g>
+  <circle cx="512" cy="608" r="18" fill="#292e30"/>
+  <path d="M526 650L488 695H508L498 732L544 678H522Z" fill="#2e8c6b"/>
+</svg>

@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+dist/
+*.app/
+*.dmg
+*.zip
+.env
+.env.*
+*.p12
+*.pem
+*.key
+*.mobileprovision
+*.xcuserstate
