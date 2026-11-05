@@ -13,6 +13,7 @@ func mark(color: NSColor = ink) {
     transform(x:64,y:64,scale:7) {
         curve([34,99,15,82,15,46,34,29], width:6, color:color)
         curve([94,29,113,46,113,82,94,99], width:6, color:color)
+        curve([34,29,50,12,78,12,94,29], width:6, color:color)
         curve([44,59,55,48,73,48,84,59], width:5.5, color:color)
         curve([52,71,59,64,69,64,76,71], width:5.5, color:color)
         color.setFill(); NSBezierPath(ovalIn:NSRect(x:61,y:80,width:6,height:6)).fill()
@@ -58,7 +59,7 @@ func menuIcon(x: CGFloat, y: CGFloat, size: CGFloat) {
         for q in [(19.5,5.0),(22.0,5.0),(21.0,8.2),(24.0,3.5),(22.0,3.5)] { p.line(to:NSPoint(x:q.0,y:q.1)) }
         p.close(); color.setFill(); p.fill()
         transform(x:16,y:13,scale:0.40) { wifi(x:0,y:0,color:color) }
-        text("拼",x:12,y:20.5,size:8,weight:.semibold,color:color)
+        text("拼",x:12,y:19.5,size:8,weight:.semibold,color:color)
     }
 }
 func overview(chinese: Bool) {

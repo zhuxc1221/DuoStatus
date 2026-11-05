@@ -115,7 +115,7 @@ final class RingView: NSView {
         let input = inputLabel as NSString
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 8, weight: .semibold), .foregroundColor: ink]
         let size = input.size(withAttributes: attributes)
-        input.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: 20.5), withAttributes: attributes)
+        input.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: 19.5), withAttributes: attributes)
         if let wifi = NSImage(systemSymbolName: symbol, variableValue: strength, accessibilityDescription: nil) {
             let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold).applying(.init(paletteColors: [ink]))
             let image = wifi.withSymbolConfiguration(configuration) ?? wifi
@@ -219,24 +219,64 @@ enum NativeWiFiMenu {
         guard let action else { return "当前系统未提供 Wi‑Fi 详情动作（\(actions.joined(separator: ", "))）。" }
         return perform(action, on: element)
     }
+    enum PanelState: String { case closed, overview, wifi, other }
+    enum PanelAction: Equatable { case open, expand, wait, done, dismissed, unavailable, missingModule, expansionFailed }
+    struct Transition {
+        var opened = false
+        var expanded = false
+        var sawWindow = false
+        mutating func next(_ state: PanelState, expired: Bool) -> PanelAction {
+            if state == .wifi { return .done }
+            if state == .closed && sawWindow { return .dismissed }
+            if expired {
+                if !sawWindow { return .unavailable }
+                return expanded ? .expansionFailed : .missingModule
+            }
+            if state != .closed { sawWindow = true }
+            if state == .overview && !expanded { expanded = true; return .expand }
+            if state == .closed && !opened { opened = true; return .open }
+            return .wait
+        }
+    }
     static func open() -> String? {
         guard AXIsProcessTrusted() else { return "需要在“设备控制和数据访问”中允许 DuoStatus。" }
         guard let button = controlCenterButton() else { return "未找到系统控制中心，请保持控制中心入口可用。" }
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.controlcenter").first else { return "系统控制中心暂不可用。" }
         let root = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(root, 0.25)
-        func windows() -> [AXUIElement] { value(root, kAXWindowsAttribute) as? [AXUIElement] ?? [] }
-        func module() -> AXUIElement? { windows().lazy.compactMap { find(in: $0, identifier: "controlcenter-wifi") }.first }
-        if windows().contains(where: { find(in: $0, identifier: "wifi-header") != nil }) { return perform(kAXPressAction, on: button) }
-        if let wifi = module() { return showWiFiDetails(wifi) }
-        // AXPress is a toggle: never retry it after a slow or indeterminate response.
-        if let error = perform(kAXPressAction, on: button) { return error }
-        let deadline = ProcessInfo.processInfo.systemUptime + 1.2
-        repeat {
-            if let wifi = module() { return showWiFiDetails(wifi) }
+        func snapshot() -> (PanelState, AXUIElement?) {
+            let windows = value(root, kAXWindowsAttribute) as? [AXUIElement] ?? []
+            for window in windows {
+                if find(in: window, identifier: "wifi-header") != nil { return (.wifi, nil) }
+                if let module = find(in: window, identifier: "controlcenter-wifi") { return (.overview, module) }
+            }
+            return (windows.isEmpty ? .closed : .other, nil)
+        }
+        // An outside click dismisses the old panel before its mouse-up action arrives.
+        Thread.sleep(forTimeInterval: 0.12)
+        let deadline = ProcessInfo.processInfo.systemUptime + 2
+        var transition = Transition()
+        let log = Logger(subsystem: "io.github.zhuxc1221.DuoStatus", category: "NativeWiFi")
+        while true {
+            let (state, module) = snapshot()
+            let action = transition.next(state, expired: ProcessInfo.processInfo.systemUptime >= deadline)
+            log.debug("panel state: \(state.rawValue, privacy: .public), action: \(String(describing: action), privacy: .public)")
+            switch action {
+            case .done, .dismissed: return nil
+            case .unavailable: return "系统面板未能打开，请再点一次。"
+            case .missingModule: return "当前控制中心未显示 Wi‑Fi 控件，请检查控制中心布局后重试。"
+            case .expansionFailed: return "Wi‑Fi 面板未能展开，请再点一次。"
+            case .open:
+                if let error = perform(kAXPressAction, on: button) { return error }
+            case .expand:
+                if let module, let error = showWiFiDetails(module) {
+                    if snapshot().0 == .closed { return nil }
+                    return error
+                }
+            case .wait: break
+            }
             Thread.sleep(forTimeInterval: 0.03)
-        } while ProcessInfo.processInfo.systemUptime < deadline
-        return "未找到控制中心中的 Wi‑Fi 模块，请先将 Wi‑Fi 控件加入控制中心。"
+        }
     }
 }
 
@@ -293,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let timing = Logger(subsystem: "io.github.zhuxc1221.DuoStatus", category: "RefreshTiming")
     var reading = false
     var openingNative = false
+    var repeatedNativeClick = false
     var nativeFinishedAt: TimeInterval = 0
     var nativeError: String?
     var managementMenu = NSMenu()
@@ -494,7 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.menu = nil
     }
     @objc func openNativeWiFi() {
-        guard !openingNative else { return }
+        guard !openingNative else { repeatedNativeClick = true; return }
         guard ProcessInfo.processInfo.systemUptime > nativeFinishedAt + 0.25 else { return }
         guard AXIsProcessTrusted() else {
             nativeError = "需要授权：请点击“授权设置”，允许 DuoStatus 打开系统 Wi‑Fi 面板。"
@@ -502,6 +543,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         nativeError = nil
+        repeatedNativeClick = false
         openingNative = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let error = NativeWiFiMenu.open()
@@ -509,7 +551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 self.nativeFinishedAt = ProcessInfo.processInfo.systemUptime
                 self.openingNative = false
-                self.nativeError = error
+                self.nativeError = self.repeatedNativeClick ? nil : error
                 self.updateUI()
                 if error != nil { self.timing.debug("native Wi-Fi request failed") }
             }
@@ -535,6 +577,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 }
 
 func selfTest() {
+    func panelActions(_ states: [NativeWiFiMenu.PanelState]) -> [NativeWiFiMenu.PanelAction] {
+        var transition = NativeWiFiMenu.Transition()
+        return states.map { transition.next($0, expired: false) }
+    }
+    precondition(panelActions([.closed, .closed, .overview, .overview, .wifi]) == [.open, .wait, .expand, .wait, .done])
+    precondition(panelActions([.overview, .closed]) == [.expand, .dismissed])
+    precondition(panelActions([.closed, .overview, .closed]) == [.open, .expand, .dismissed])
+    precondition(panelActions([.wifi]) == [.done])
+    var missing = NativeWiFiMenu.Transition()
+    precondition(missing.next(.other, expired: false) == .wait)
+    precondition(missing.next(.other, expired: true) == .missingModule)
+    var slow = NativeWiFiMenu.Transition()
+    precondition(slow.next(.closed, expired: false) == .open)
+    precondition(slow.next(.closed, expired: true) == .unavailable)
     precondition(!AppDelegate.acceptsNativeClick(eventTime: 9, finishedAt: 10))
     precondition(!AppDelegate.acceptsNativeClick(eventTime: 10.1, finishedAt: 10))
     precondition(AppDelegate.acceptsNativeClick(eventTime: 10.3, finishedAt: 10))
@@ -589,7 +645,7 @@ func selfTest() {
     for view in content.subviews {
         precondition(content.bounds.contains(view.frame), "Window content must not clip")
     }
-    print("PASS: centered charging/unplugged header, input source labels, window missing/zero/error states and bounds, battery values, Wi-Fi signal levels and menu-bar template image rendering, Control Center detail action (never Wi-Fi toggle), paused-charge bolt rendering")
+    print("PASS: native panel open/dismiss/timeout transitions, centered charging/unplugged header, input source labels, window missing/zero/error states and bounds, battery values, Wi-Fi signal levels and menu-bar template image rendering, Control Center detail action (never Wi-Fi toggle), paused-charge bolt rendering")
 }
 
 func renderPreview(_ path: String) throws {

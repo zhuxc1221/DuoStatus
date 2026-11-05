@@ -115,6 +115,8 @@ On macOS 27.2, the original Wi-Fi and Battery items were both hidden while ordin
 
 In v0.6, repeated clicking and right-click dismissal were rechecked after removing the native-panel toggle retry. The original Text Input icon was also hidden. Hardware testing confirmed Pinyin/ABC switching, unplugging/reconnecting the adapter, and centered headers in both power states. Self-checks additionally cover header centering at 0/8/80/100, input-source labels and rendering, battery calculations and invalid input, paused-charge indication, signal levels and safe detail-action selection. Actual network switching and third-party input methods have not been validated.
 
+v0.7.1 additionally checks native-panel transition histories: opening, dismissal during expansion, delayed appearance and timeouts. Repeated menu-bar clicks and Option-clicks were rechecked on hardware with no error reported. The input indicator is raised by one point; the app logo now has a connected upper ring.
+
 ## Credits
 
 [BarTap](https://github.com/ChenFangfc/BarTap) inspired the project's clear bilingual presentation. [baaar](https://github.com/bylaaabs/baaar) helped identify the macOS 27 menu bar host. DuoStatus's logo and documentation illustrations are original assets for this project.
