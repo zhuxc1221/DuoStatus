@@ -126,7 +126,7 @@ v0.7.1 additionally checks native-panel transition histories: opening, dismissal
 
 ## Credits
 
-[BarTap](https://github.com/ChenFangfc/BarTap) inspired the project's clear bilingual presentation. [baaar](https://github.com/bylaaabs/baaar) helped identify the macOS 27 menu bar host. DuoStatus's logo and documentation illustrations are original assets for this project.
+[baaar](https://github.com/bylaaabs/baaar) helped identify the macOS 27 menu bar host. DuoStatus's logo and documentation illustrations are original assets for this project.
 
 ## License
 

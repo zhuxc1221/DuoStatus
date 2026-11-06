@@ -126,7 +126,7 @@ v0.7.1 补充检查原生面板的打开、展开中关闭、延迟出现及超�
 
 ## 致谢
 
-[BarTap](https://github.com/ChenFangfc/BarTap) 的简洁双语项目展示提供了参考。[baaar](https://github.com/bylaaabs/baaar) 为识别 macOS 27 菜单栏宿主提供了线索。DuoStatus 的 Logo 和文档配图均为本项目原创。
+[baaar](https://github.com/bylaaabs/baaar) 为识别 macOS 27 菜单栏宿主提供了线索。DuoStatus 的 Logo 和文档配图均为本项目原创。
 
 ## 许可
 
