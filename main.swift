@@ -4,6 +4,7 @@ import CoreWLAN
 import ApplicationServices
 import Carbon
 import OSLog
+import ServiceManagement
 
 struct Battery: Equatable {
     let percent: Int
@@ -326,6 +327,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var inputValue: NSTextField!
     var inputDetail: NSTextField!
     var permissionValue: NSTextField!
+    var permissionButton: NSButton!
+    var loginSwitch: NSSwitch!
+    var loginDetail: NSTextField!
     var preview: RingView!
     var timer: Timer?
     var powerSource: CFRunLoopSource?
@@ -366,7 +370,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showWindow()
     }
     func makeWindow() {
-        let size = NSSize(width: 420, height: 524)
+        let size = NSSize(width: 420, height: 568)
         window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "DuoStatus"
         window.titlebarAppearsTransparent = true
@@ -410,11 +414,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         batteryDetail = details[0]; wifiDetail = details[1]; inputDetail = details[2]
         _ = label("系统面板访问", NSRect(x: 28, y: 287, width: 120, height: 20), weight: .medium)
         permissionValue = label("检查中", NSRect(x: 168, y: 288, width: 126, height: 18), size: 12, secondary: true, align: .right)
-        let permission = NSButton(title: "权限设置…", target: self, action: #selector(accessibilitySettings))
-        permission.isBordered = false
-        permission.font = .systemFont(ofSize: 12)
-        permission.frame = NSRect(x: 304, y: 281, width: 88, height: 28)
-        content.addSubview(permission)
+        permissionButton = NSButton(title: "请求授权…", target: self, action: #selector(accessibilitySettings))
+        permissionButton.isBordered = false
+        permissionButton.font = .systemFont(ofSize: 12)
+        permissionButton.frame = NSRect(x: 304, y: 281, width: 88, height: 28)
+        content.addSubview(permissionButton)
         status = label("通过控制中心打开原生 Wi‑Fi 面板。", NSRect(x: 28, y: 315, width: 364, height: 36), size: 12, secondary: true)
         let native = PrimaryButton(title: "打开 Wi‑Fi 面板", target: self, action: #selector(openNativeWiFi))
         native.isBordered = false
@@ -425,14 +429,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             _ = label(row.0, NSRect(x: 28, y: y, width: 140, height: 18), size: 12, secondary: true)
             _ = label(row.1, NSRect(x: 188, y: y, width: 204, height: 18), size: 12, align: .right)
         }
-        let footerRule = NSBox(frame: NSRect(x: 28, y: 484, width: 364, height: 1))
+        _ = label("登录时启动", NSRect(x: 28, y: 495, width: 100, height: 20), weight: .medium)
+        loginDetail = label("", NSRect(x: 130, y: 496, width: 210, height: 20), size: 11, secondary: true, align: .right)
+        loginSwitch = NSSwitch(frame: NSRect(x: 352, y: 492, width: 40, height: 26))
+        loginSwitch.setAccessibilityLabel("登录时启动")
+        loginSwitch.target = self
+        loginSwitch.action = #selector(toggleLaunchAtLogin(_:))
+        content.addSubview(loginSwitch)
+        updateLoginItem()
+        let footerRule = NSBox(frame: NSRect(x: 28, y: 528, width: 364, height: 1))
         footerRule.boxType = .separator
         content.addSubview(footerRule)
-        _ = label("关闭窗口后，仍在菜单栏运行", NSRect(x: 28, y: 498, width: 290, height: 17), size: 11, secondary: true)
+        _ = label("关闭窗口后，仍在菜单栏运行", NSRect(x: 28, y: 542, width: 290, height: 17), size: 11, secondary: true)
         let quit = NSButton(title: "退出", target: self, action: #selector(quit))
         quit.isBordered = false
         quit.font = .systemFont(ofSize: 11)
-        quit.frame = NSRect(x: 348, y: 492, width: 44, height: 28)
+        quit.frame = NSRect(x: 348, y: 536, width: 44, height: 28)
         content.addSubview(quit)
     }
     func updateWindow() {
@@ -452,9 +464,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         inputValue.stringValue = inputSource.label
         inputDetail.stringValue = inputSource.label == "拼" ? "简体拼音" : (inputSource.label == "A" ? "英文输入" : inputSource.name)
         let trusted = AXIsProcessTrusted()
+        permissionButton.title = trusted ? "权限设置…" : "请求授权…"
         permissionValue.stringValue = trusted ? "已授权" : "需要授权"
         permissionValue.textColor = trusted ? WindowInk.muted : WindowInk.warning
-        status.stringValue = nativeError ?? (trusted ? "可隐藏原生 Wi‑Fi、电池和文字输入图标。" : "允许 DuoStatus 访问系统面板，即可使用原生 Wi‑Fi 菜单。")
+        status.stringValue = nativeError ?? (trusted ? "可隐藏原生 Wi‑Fi、电池和文字输入图标。" : "点击「请求授权」，在 macOS 提示中选择。也可在「隐私与安全 → 设备控制和数据访问」中管理授权。")
         status.textColor = nativeError == nil ? WindowInk.muted : WindowInk.error
     }
     @objc func wake() { refreshPower(); refreshInput(); refresh() }
@@ -538,7 +551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !openingNative else { repeatedNativeClick = true; return }
         guard ProcessInfo.processInfo.systemUptime > nativeFinishedAt + 0.25 else { return }
         guard AXIsProcessTrusted() else {
-            nativeError = "需要授权：请点击“授权设置”，允许 DuoStatus 打开系统 Wi‑Fi 面板。"
+            nativeError = nil
             updateUI()
             return
         }
@@ -558,8 +571,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     @objc func accessibilitySettings() {
-        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+        guard AXIsProcessTrusted() else {
+            _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+            return
+        }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") { NSWorkspace.shared.open(url) }
+    }
+    func updateLoginItem() {
+        let state = SMAppService.mainApp.status
+        loginSwitch.state = state == .enabled || state == .requiresApproval ? .on : .off
+        loginDetail.stringValue = state == .requiresApproval ? "请在系统登录项中允许" : ""
+        loginDetail.toolTip = nil
+    }
+    @objc func toggleLaunchAtLogin(_ sender: NSSwitch) {
+        let service = SMAppService.mainApp
+        do {
+            if sender.state == .on { try service.register() }
+            else { try service.unregister() }
+            updateLoginItem()
+        } catch {
+            updateLoginItem()
+            loginDetail.stringValue = "更改失败，请检查系统登录项"
+            loginDetail.toolTip = error.localizedDescription
+        }
+    }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard window != nil else { return }
+        updateWindow()
+        updateLoginItem()
     }
     @objc func wifiSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.wifi-settings-extension") { NSWorkspace.shared.open(url) }

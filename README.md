@@ -56,9 +56,11 @@ Other macOS versions and Intel builds have not been validated.
 ## Set up
 
 1. [Download the latest release](https://github.com/zhuxc1221/DuoStatus/releases/latest), unzip it and move `DuoStatus.app` to Applications. Quit an older copy before opening a replacement.
-2. Open DuoStatus. For the native Wi-Fi panel, allow it in **System Settings → Privacy & Security → Device Control and Data Access**. On some macOS versions this permission is called **Accessibility**.
+2. Open DuoStatus and click **请求授权…** to request access to the native Wi-Fi panel. Choose whether to open System Settings in the macOS prompt. You can also manage access in **System Settings → Privacy & Security → Device Control and Data Access** (called **Accessibility** on some versions).
 3. In **System Settings → Menu Bar**, turn off the original **Wi-Fi**, **Battery** and **Text Input** items. Leave DuoStatus enabled. Three items are now represented by one combined icon.
 4. Keep the existing **Control Center** entry available. DuoStatus uses it to open the native Wi-Fi panel; the original Wi-Fi menu bar icon can stay hidden.
+
+Turn on **登录时启动** in the DuoStatus window to open it automatically when you sign in to macOS. If macOS requests approval, allow DuoStatus in **System Settings → General → Login Items & Extensions**.
 
 The release is ad-hoc signed and is not notarized by Apple. If macOS blocks it, use the app-specific **Open Anyway** control in **System Settings → Privacy & Security**, or build it from source. The project does not ask you to disable Gatekeeper globally.
 
@@ -107,7 +109,6 @@ Editable SVGs live in `assets/logo/`. Raster assets are drawn with AppKit; the d
 - Notification-to-icon submission is measured in milliseconds, but system notification delivery and display refresh add latency. This is not a hard real-time guarantee.
 - Third-party input methods that change internal language mode without publishing a system input-source change may not update the indicator. Only Apple Pinyin/ABC switching has been checked on hardware.
 - Hiding Text Input removes its menu entry; keyboard switching still works. The combined icon continues to open Wi-Fi.
-- Launch at login is not configured automatically. You can add the app to your login items.
 
 ## Validation
 
