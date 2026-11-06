@@ -55,7 +55,7 @@ DuoStatus 将数字电量、电量圆环、Wi-Fi 和当前输入法状态合成�
 
 ## 安装与设置
 
-1. [下载最新版本](https://github.com/zhuxc1221/DuoStatus/releases/latest)，解压后将 `DuoStatus.app` 放到「应用程序」。替换旧版本前，先退出正在运行的旧副本。
+1. [下载 DMG](https://github.com/zhuxc1221/DuoStatus/releases/latest)，打开后将 **DuoStatus** 拖到窗口右侧的 **Applications（应用程序）**。推出磁盘映像，再从「应用程序」启动 DuoStatus。下载 ZIP 时，解压后将 `DuoStatus.app` 移到「应用程序」。替换旧版本前，先退出正在运行的旧副本。
 2. 打开 DuoStatus，点击 **请求授权…** 以使用原生 Wi-Fi 面板。在 macOS 弹窗中自行选择是否前往系统设置。也可在 **系统设置 → 隐私与安全 → 设备控制和数据访问** 中管理授权，部分 macOS 版本称其为 **辅助功能**。
 3. 在 **系统设置 → 菜单栏** 中关闭原生 **Wi-Fi**、**电池** 和 **文字输入**，保留 DuoStatus。原来的三个图标由一个组合图标代替。
 4. 保持系统已有的 **控制中心** 入口可用。DuoStatus 通过它打开原生 Wi-Fi 面板，无需保留原生 Wi-Fi 菜单栏图标。
@@ -99,6 +99,12 @@ cd DuoStatus
 ```
 
 可编辑 SVG 位于 `assets/logo/`。位图资源使用 AppKit 绘制，文档配图只包含示例数据。
+
+构建完成后，可在安装了 `uv` 的 Mac 上从仓库根目录运行以下命令，生成拖放安装用的 DMG。
+
+```sh
+uvx --from dmgbuild==1.6.7 dmgbuild -s scripts/dmg-settings.py DuoStatus dist/DuoStatus.dmg
+```
 
 ## 已知限制
 

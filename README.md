@@ -55,7 +55,7 @@ Other macOS versions and Intel builds have not been validated.
 
 ## Set up
 
-1. [Download the latest release](https://github.com/zhuxc1221/DuoStatus/releases/latest), unzip it and move `DuoStatus.app` to Applications. Quit an older copy before opening a replacement.
+1. [Download the DMG](https://github.com/zhuxc1221/DuoStatus/releases/latest), open it and drag **DuoStatus** onto **Applications**. Eject the disk image and open DuoStatus from Applications. For the ZIP download, unzip it and move `DuoStatus.app` to Applications. Quit an older copy before replacing it.
 2. Open DuoStatus and click **请求授权…** to request access to the native Wi-Fi panel. Choose whether to open System Settings in the macOS prompt. You can also manage access in **System Settings → Privacy & Security → Device Control and Data Access** (called **Accessibility** on some versions).
 3. In **System Settings → Menu Bar**, turn off the original **Wi-Fi**, **Battery** and **Text Input** items. Leave DuoStatus enabled. Three items are now represented by one combined icon.
 4. Keep the existing **Control Center** entry available. DuoStatus uses it to open the native Wi-Fi panel; the original Wi-Fi menu bar icon can stay hidden.
@@ -99,6 +99,12 @@ To regenerate the logo PNG, macOS icon and documentation illustrations:
 ```
 
 Editable SVGs live in `assets/logo/`. Raster assets are drawn with AppKit; the documentation images use sample values only.
+
+To package the built app as a drag-to-install DMG, run the following from the repository root with `uv` installed.
+
+```sh
+uvx --from dmgbuild==1.6.7 dmgbuild -s scripts/dmg-settings.py DuoStatus dist/DuoStatus.dmg
+```
 
 ## Known limitations
 
